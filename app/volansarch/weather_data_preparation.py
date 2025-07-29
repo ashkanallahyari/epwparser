@@ -392,8 +392,18 @@ class EPWFilePreparator:
     def list_files_needed_update(self):
         settings = self.settings
         # Creating the loading path
-        path_raw = settings["EPW_RAW_PATH"]
-        path_parsed = settings["EPW_PARSED_PATH"]
+        if os.path.isdir(settings["EPW_RAW_PATH"]):
+            path_raw = settings["EPW_RAW_PATH"]
+        else:
+            os.makedirs(settings["EPW_RAW_PATH"])
+            path_raw = settings["EPW_RAW_PATH"]
+    
+        if os.path.isdir(settings["EPW_PARSED_PATH"]):
+            path_parsed = settings["EPW_PARSED_PATH"]
+        else:
+            os.makedirs(settings["EPW_PARSED_PATH"])
+            path_parsed = settings["EPW_PARSED_PATH"]
+
 
         raw_files = [file for file in os.listdir(path_raw) if os.path.isfile(os.path.join(path_raw, file))]
         raw_files_format_removed = [os.path.splitext(filename)[0] for filename in raw_files]

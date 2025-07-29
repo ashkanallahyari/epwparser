@@ -53,11 +53,12 @@ class EPWFileselection:
         )
 
         # Sort by distance
-        df_sorted = df_latest.sort_values(by="distance_km")
+        df_sorted = df_latest.sort_values(by="distance_km", ascending=True)
+        nearest_distance = df_sorted.iloc[0]["distance_km"]
 
         # Optionally filter by max_distance
         if self.max_distance is not None:
-            df_sorted = df_sorted[df_sorted["distance_km"] <= self.max_distance]
+            df_sorted = df_sorted[df_sorted["distance_km"] <= nearest_distance+self.max_distance]
             n_nearest_locations = df_sorted.head(self.loc_numbers).reset_index(drop=True)
         else:
             n_nearest_locations = df_sorted.head(self.loc_numbers).reset_index(drop=True)
