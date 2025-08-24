@@ -3,26 +3,20 @@ import os
 import json
 import zipfile
 from datetime import datetime
+from datetime import datetime
+import jdatetime
 
-# Loading environment variables
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
+SETTINGS = dotenv_values()
 
 class EPWFilePreparator:
     def __init__(self):
-        load_dotenv()
-        self.settings = {
-            "EPW_RAW_PATH": os.getenv("EPW_RAW_PATH"),
-            "EPW_PARSED_PATH": os.getenv("EPW_PARSED_PATH"),
-            "EPW_COMBINED_PATH": os.getenv("EPW_COMBINED_PATH"),
-            "EPW_COMBINED_INDEX_NAME": os.getenv("EPW_COMBINED_INDEX_NAME"),
-        }
-        self.raw_data_file_names = self.list_files_in_directory(self.settings["EPW_RAW_PATH"])
-        self.parsed_data_file_names = self.list_files_in_directory(self.settings["EPW_PARSED_PATH"])
+        self.raw_data_file_names = self.list_files_in_directory(SETTINGS["EPW_RAW_PATH"])
+        self.parsed_data_file_names = self.list_files_in_directory(SETTINGS["EPW_PARSED_PATH"])
 
     def parse_file(self, file_name):
-        settings = self.settings
         # Creating the loading path
-        file_path = os.path.join(settings["EPW_RAW_PATH"], file_name)
+        file_path = os.path.join(SETTINGS["EPW_RAW_PATH"], file_name)
 
         # Opening file depending the format
         if os.path.splitext(file_name)[-1] == ".zip":
@@ -87,16 +81,16 @@ class EPWFilePreparator:
         
         def parse_int(value):
             return int(value) if value not in INVALID_FLOAT_VALUES else None
-
+        
         data["metadata"] = {}
         
         data["metadata"]["design_conditions"] = {
             "flag": parse_int(design_conditions_row[1]),
             "source_description": design_conditions_row[2] if len(design_conditions_row) > 2 else None,
             "heating": {
-                "Identifier": parse_int(design_conditions_row[heating_index + 1]),    # Identifier for the heating season (likely a month, e.g., 1 = January).
+                "Identifier": str(parse_int(design_conditions_row[heating_index + 1])),    # Identifier for the heating season (likely a month, e.g., 1 = January).
                 "DB_99.6": parse_float(design_conditions_row[heating_index + 2]),     # 99.6% heating dry-bulb temperature (°C).
-                "DB_99.6": parse_float(design_conditions_row[heating_index + 3]),   # 99% heating dry-bulb temperature (°C).
+                "DB_99": parse_float(design_conditions_row[heating_index + 3]),   # 99% heating dry-bulb temperature (°C).
                 "DB_Mean": parse_float(design_conditions_row[heating_index + 4]),   # Mean daily minimum dry-bulb temperature (°C).
                 "WS_99.6": parse_float(design_conditions_row[heating_index + 5]),   # Wind speed at 99.6% heating condition (m/s).
                 "MCW_99.6": parse_float(design_conditions_row[heating_index + 6]),   # Mean coincident wet-bulb temperature at 99.6% condition (°C).
@@ -112,7 +106,7 @@ class EPWFilePreparator:
                 "Clearness": parse_float(design_conditions_row[heating_index + 16]) ,   # Clearness number or humidity-related coefficient.
             } if heating_index else None,
             "cooling": {
-                "Identifier": parse_int(design_conditions_row[cooling_index + 1]),    # Identifier for the cooling season (likely a month, e.g., 1 = January).
+                "Identifier": str(parse_int(design_conditions_row[cooling_index + 1])),    # Identifier for the cooling season (likely a month, e.g., 1 = January).
                 "Evap_DB": parse_float(design_conditions_row[cooling_index + 2]),     # Evaporation dry-bulb temperature (°C).
                 "DB_0.4": parse_float(design_conditions_row[cooling_index + 3]),     # 0.4% cooling dry-bulb temperature (°C).
                 "MCW_0.4": parse_float(design_conditions_row[cooling_index + 4]),     # Mean coincident wet-bulb temperature at 0.4% condition (°C).
@@ -284,12 +278,19 @@ class EPWFilePreparator:
         for i in range(8, len(lines)):
             data_row = lines[i].split(",")
 
+            # Create datetime object for Jalali conversion
+            gregorian_dt = datetime(parse_int(data_row[0]), parse_int(data_row[1]), parse_int(data_row[2]), parse_int(data_row[3])-1, parse_int(data_row[4]))
+            jalali_dt = jdatetime.datetime.fromgregorian(datetime=gregorian_dt)
+            
             weather_data.append({
-                "Year": parse_int(data_row[0]),                                # Year of the data (e.g., 2019).
-                "Month": parse_int(data_row[1]),                               # Month of the data (1-12).
-                "Day": parse_int(data_row[2]),                                 # Day of the month (1-31).
-                "Hour": parse_int(data_row[3]),                                # Hour of the day (1-24, where 1 is 00:00:01-01:00:00).
-                "Minute": parse_int(data_row[4]),                              # Minute of the hour (0-59, typically 0 or 30).
+                "Year": str(parse_int(data_row[0])),                                # Year of the data (e.g., 2019).
+                "Month": str(parse_int(data_row[1])),                               # Month of the data (1-12).
+                "Day": str(parse_int(data_row[2])),                                 # Day of the month (1-31).
+                "Hour": str(parse_int(data_row[3])),                                # Hour of the day (1-24, where 1 is 00:00:01-01:00:00).
+                "Minute": str(parse_int(data_row[4])),                              # Minute of the hour (0-59, typically 0 or 30).
+                "Year_Jalali": str(jalali_dt.year),                                 # Jalali year (e.g., 1398).
+                "Month_Jalali": str(jalali_dt.month),                               # Jalali month (1-12).
+                "Day_Jalali": str(jalali_dt.day),                                   # Jalali day (1-31).
                 "Data_Source_Uncertainty_Flags": data_row[5].strip(),    # String indicating data source and uncertainty.
                 "Dry_Bulb_Temperature": parse_float(data_row[6]),               # Dry bulb temperature (°C).
                 "Dew_Point_Temperature": parse_float(data_row[7]),              # Dew point temperature (°C).
@@ -334,14 +335,14 @@ class EPWFilePreparator:
         # Change the file extension to .json
         base_name = os.path.splitext(file_name)[0]
         save_name = base_name + ".json"
-        save_path = os.path.join(settings["EPW_PARSED_PATH"], save_name)
+        save_path = os.path.join(SETTINGS["EPW_PARSED_PATH"], save_name)
 
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         with open(save_path, "w") as file:
             json.dump(data, file, indent=4)
 
         # Updating the combined index file
-        EPW_COMBINED_PATH = os.path.join(settings["EPW_COMBINED_PATH"], settings["EPW_COMBINED_INDEX_NAME"])
+        EPW_COMBINED_PATH = os.path.join(SETTINGS["EPW_COMBINED_PATH"], SETTINGS["EPW_COMBINED_INDEX_NAME"])
 
         if os.path.exists(EPW_COMBINED_PATH):
             summary_df = pd.read_csv(EPW_COMBINED_PATH)
@@ -390,19 +391,18 @@ class EPWFilePreparator:
 
 
     def list_files_needed_update(self):
-        settings = self.settings
         # Creating the loading path
-        if os.path.isdir(settings["EPW_RAW_PATH"]):
-            path_raw = settings["EPW_RAW_PATH"]
+        if os.path.isdir(SETTINGS["EPW_RAW_PATH"]):
+            path_raw = SETTINGS["EPW_RAW_PATH"]
         else:
-            os.makedirs(settings["EPW_RAW_PATH"])
-            path_raw = settings["EPW_RAW_PATH"]
+            os.makedirs(SETTINGS["EPW_RAW_PATH"])
+            path_raw = SETTINGS["EPW_RAW_PATH"]
     
-        if os.path.isdir(settings["EPW_PARSED_PATH"]):
-            path_parsed = settings["EPW_PARSED_PATH"]
+        if os.path.isdir(SETTINGS["EPW_PARSED_PATH"]):
+            path_parsed = SETTINGS["EPW_PARSED_PATH"]
         else:
-            os.makedirs(settings["EPW_PARSED_PATH"])
-            path_parsed = settings["EPW_PARSED_PATH"]
+            os.makedirs(SETTINGS["EPW_PARSED_PATH"])
+            path_parsed = SETTINGS["EPW_PARSED_PATH"]
 
 
         raw_files = [file for file in os.listdir(path_raw) if os.path.isfile(os.path.join(path_raw, file))]
